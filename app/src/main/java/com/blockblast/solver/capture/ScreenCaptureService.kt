@@ -105,6 +105,10 @@ class ScreenCaptureService : Service() {
         try {
             startCapture(media)
             running = true
+            // The runtime is the single source of truth for "capture is live" — the service's own
+            // flag is private. Without this the UI button never flips and every frame is dropped
+            // by SolverRuntime.onFrame's running check, which is exactly what happened before.
+            SolverRuntime.start()
             Diag.i(TAG, "capture started")
         } catch (t: Throwable) {
             Diag.e(TAG, "startCapture failed", t)
@@ -122,11 +126,24 @@ class ScreenCaptureService : Service() {
         reader = imageReader
 
         imageReader.setOnImageAvailableListener({ r ->
-            val image = r.acquireLatestImage() ?: return@setOnImageAvailableListener
+            val image = try {
+                r.acquireLatestImage()
+            } catch (t: Throwable) {
+                Diag.e(TAG, "acquireLatestImage failed", t)
+                null
+            }
+            if (image == null) {
+                // Seen on some devices when the virtual display size does not match the real
+                // framebuffer; log it so the report shows the mismatch instead of silent silence.
+                Diag.w(TAG, "frame callback with no image (size=${width}x$height)")
+                return@setOnImageAvailableListener
+            }
             try {
+                Diag.d(TAG, "frame ${image.width}x${image.height} fmt=${image.format}")
                 SolverRuntime.onFrame(image, width, height)
-            } catch (_: Throwable) {
-                // Never let a bad frame kill the capture thread.
+            } catch (t: Throwable) {
+                // Never let a bad frame kill the capture thread — but record why it was bad.
+                Diag.e(TAG, "onFrame failed", t)
             } finally {
                 image.close()
             }
@@ -142,6 +159,7 @@ class ScreenCaptureService : Service() {
             null,
             handler,
         )
+        Diag.i(TAG, "virtual display created ${width}x$height density=$density")
     }
 
     private fun realScreenMetrics(): Pair<Int, Int> {

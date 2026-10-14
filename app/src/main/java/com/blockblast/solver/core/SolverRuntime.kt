@@ -76,6 +76,10 @@ object SolverRuntime {
     @Volatile
     private var cachedGeometry: GridDetector.GridGeometry? = null
 
+    /** Total frames handed to us this session; used for the early "frames flow" diagnostics. */
+    @Volatile
+    private var receivedFrames = 0
+
     fun addListener(l: Listener) {
         if (!listeners.contains(l)) listeners.add(l)
     }
@@ -97,6 +101,12 @@ object SolverRuntime {
      */
     fun onFrame(image: Image, width: Int, height: Int) {
         if (!running.get()) return
+        // Log the first few arrivals so the report shows whether frames flow at all — the most
+        // common failure is a silent no-frame stream, which used to leave no trace.
+        receivedFrames++
+        if (receivedFrames <= 3) {
+            Diag.i(TAG, "frame #$receivedFrames arrived ${image.width}x${image.height}")
+        }
         val frameInterval = (1000L / targetFps.coerceAtLeast(1))
         val now = System.currentTimeMillis()
         if (now - lastFrameTime < frameInterval) return

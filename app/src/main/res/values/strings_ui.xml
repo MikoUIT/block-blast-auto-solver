@@ -24,7 +24,7 @@
     <string name="ui_update_failed">Не удалось проверить: %1$s</string>
     <string name="ui_update_no_install">Разреши установку приложений из этого источника</string>
     <string name="ui_report_title">Отчёт об ошибке</string>
-    <string name="ui_report_token_hint">GitHub-токен (Issues:write) — хранится только на телефоне</string>
+    <string name="ui_report_token_hint">GitHub-токен (Issues + Contents: write) — хранится только на телефоне</string>
     <string name="ui_report_note_hint">Что случилось? Опиши своими словами</string>
     <string name="ui_report_send">Отправить отчёт</string>
     <string name="ui_report_no_token">Сначала вставь GitHub-токен</string>

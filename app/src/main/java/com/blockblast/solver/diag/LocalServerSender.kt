@@ -30,12 +30,17 @@ object LocalServerSender {
     /** Posts the report as JSON. Must be called off the main thread. */
     fun send(context: Context, userNote: String): Result {
         val payload = buildPayload(context, userNote)
+        val bytes = payload.toString().toByteArray(Charsets.UTF_8)
+
         val connection = try {
             (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 connectTimeout = 6000
                 readTimeout = 20000
                 doOutput = true
+                // Explicit fixed-length streaming: without this, a large body (the snapshots) can
+                // be sent chunked or truncated, and some servers/stack layers silently drop it.
+                setFixedLengthStreamingMode(bytes.size)
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 setRequestProperty("User-Agent", "BlockBlastSolver-Local")
             }
@@ -44,7 +49,6 @@ object LocalServerSender {
         }
 
         return try {
-            val bytes = payload.toString().toByteArray(Charsets.UTF_8)
             connection.outputStream.use { it.write(bytes) }
             val code = connection.responseCode
             if (code in 200..299) {
@@ -59,7 +63,7 @@ object LocalServerSender {
             }
         } catch (t: Throwable) {
             Diag.e("LocalReport", "send failed", t)
-            Result.Failed("нет связи с ПК (${t.message ?: t::class.simpleName})")
+            Result.Failed("${t::class.simpleName}: ${t.message ?: "нет связи с ПК"}")
         } finally {
             connection.disconnect()
         }

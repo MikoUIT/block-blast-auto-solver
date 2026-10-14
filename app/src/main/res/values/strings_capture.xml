@@ -1,0 +1,5 @@
+<resources>
+    <string name="notification_channel_capture">Захват экрана</string>
+    <string name="notification_capture_title">Block Blast Solver работает</string>
+    <string name="notification_capture_text">Идёт распознавание экрана</string>
+</resources>

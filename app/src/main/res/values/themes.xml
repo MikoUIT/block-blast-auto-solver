@@ -1,0 +1,17 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.BlockBlastSolver" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:statusBarColor" tools:targetApi="l">#1B1B1F</item>
+    </style>
+
+    <!--
+      The consent screen must be a real, opaque, visible Activity: since Android 14 the system
+      refuses to show the MediaProjection dialog when the requesting Activity is translucent or
+      otherwise not considered visible. A fully transparent theme silently swallows the prompt.
+    -->
+    <style name="Theme.BlockBlastSolver.Consent" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:windowBackground">#F01B1B1F</item>
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+    </style>
+</resources>

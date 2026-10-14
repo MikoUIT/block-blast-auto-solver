@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Block Blast Solver</string>
+    <string name="accessibility_service_label">Block Blast Solver — управление</string>
+    <string name="accessibility_service_description">Нужен, чтобы солвер мог сам расставлять фигуры в игре (drag-and-drop). Без него работает только режим подсказки.</string>
+</resources>

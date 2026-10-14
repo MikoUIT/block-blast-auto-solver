@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ui_subtitle">Решатель Block Blast со зрением в реальном времени. Всё работает на устройстве.</string>
+    <string name="ui_grant_overlay">Оверлей</string>
+    <string name="ui_grant_accessibility">Доступ</string>
+    <string name="ui_start_capture">Начать захват экрана</string>
+    <string name="ui_stop_capture">Остановить захват</string>
+    <string name="ui_mode_title">Режим</string>
+    <string name="ui_mode_hint">Подсказка</string>
+    <string name="ui_mode_solver">Решатель</string>
+    <string name="ui_debug_title">Отладка</string>
+    <string name="ui_debug_overlay">Показывать debug-слой (сетка, клетки, фигуры)</string>
+    <string name="ui_footer">Открой игру поверх этого окна или сверни солвер. Оверлей рисуется поверх любой программы.</string>
+    <string name="ui_perm_overlay_ok">Оверлей: разрешён</string>
+    <string name="ui_perm_overlay_no">Оверлей: НЕ разрешён</string>
+    <string name="ui_perm_access_ok">Управление: подключено</string>
+    <string name="ui_perm_access_no">Управление: НЕ подключено</string>
+    <string name="ui_status_waiting">Ожидание кадров…</string>
+</resources>

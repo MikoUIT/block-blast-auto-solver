@@ -133,6 +133,26 @@
             android:textColor="#B0FFB0"
             android:textSize="12sp" />
 
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginVertical="20dp"
+            android:background="#33FFFFFF" />
+
+        <TextView
+            android:id="@+id/textVersion"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#99FFFFFF"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/btnCheckUpdate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/ui_check_update" />
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

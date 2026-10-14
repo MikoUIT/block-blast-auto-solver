@@ -1,8 +1,12 @@
 package com.blockblast.solver.ui
 
+import android.app.DownloadManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
@@ -14,6 +18,11 @@ import com.blockblast.solver.capture.ScreenCaptureService
 import com.blockblast.solver.core.SolverRuntime
 import com.blockblast.solver.databinding.ActivityMainBinding
 import com.blockblast.solver.overlay.OverlayService
+import com.blockblast.solver.update.UpdateChecker
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The control panel. Starts/stops capture, switches mode, toggles the debug layer and reports
@@ -35,6 +44,8 @@ class MainActivity : AppCompatActivity(), SolverRuntime.Listener {
         binding.btnOverlayPermission.setOnClickListener { requestOverlayPermission() }
         binding.btnAccessibility.setOnClickListener { openAccessibilitySettings() }
         binding.btnToggleCapture.setOnClickListener { toggleCapture() }
+        binding.btnCheckUpdate.setOnClickListener { checkForUpdates() }
+        binding.textVersion.text = getString(R.string.ui_version_fmt, currentVersionName(), currentVersionCode())
         binding.modeGroup.setOnCheckedChangeListener { _, checkedId ->
             SolverRuntime.mode = if (checkedId == binding.modeSolver.id) {
                 SolverRuntime.Mode.SOLVER
@@ -46,6 +57,24 @@ class MainActivity : AppCompatActivity(), SolverRuntime.Listener {
         binding.checkDebug.setOnCheckedChangeListener { _, checked ->
             sendOverlayCommand(OverlayService.ACTION_SET_DEBUG, checked)
             sendOverlayCommand(OverlayService.ACTION_SET_HINT, checked)
+        }
+    }
+
+    private fun currentVersionName(): String =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, 0).versionName ?: "?"
+        }
+
+    private fun currentVersionCode(): Long {
+        val info = packageManager.getPackageInfo(packageName, 0)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            info.versionCode.toLong()
         }
     }
 
@@ -146,6 +175,74 @@ class MainActivity : AppCompatActivity(), SolverRuntime.Listener {
 
     override fun onCaptureError(message: String) {
         runOnUiThread { binding.statusRuntime.text = message }
+    }
+
+    // --- updates -----------------------------------------------------------------------------
+
+    /**
+     * Asks GitHub for the latest release and, if it is newer, downloads its APK and opens the system
+     * installer. Everything runs off a background coroutine so the UI thread stays responsive.
+     */
+    private fun checkForUpdates() {
+        val button = binding.btnCheckUpdate
+        button.isEnabled = false
+        button.text = getString(R.string.ui_update_checking)
+        val code = currentVersionCode().toInt()
+        val name = currentVersionName()
+
+        CoroutineScope(Dispatchers.IO).launch {
+            val result = UpdateChecker.check(code, name)
+            withContext(Dispatchers.Main) {
+                button.isEnabled = true
+                button.text = getString(R.string.ui_check_update)
+                when (result) {
+                    is UpdateChecker.Result.UpToDate ->
+                        Toast.makeText(this@MainActivity, R.string.ui_update_current, Toast.LENGTH_SHORT).show()
+
+                    is UpdateChecker.Result.UpdateAvailable -> {
+                        Toast.makeText(
+                            this@MainActivity,
+                            getString(R.string.ui_update_available, result.latest),
+                            Toast.LENGTH_LONG,
+                        ).show()
+                        downloadAndInstall(result.downloadUrl)
+                    }
+
+                    is UpdateChecker.Result.Failed ->
+                        Toast.makeText(
+                            this@MainActivity,
+                            getString(R.string.ui_update_failed, result.message),
+                            Toast.LENGTH_LONG,
+                        ).show()
+                }
+            }
+        }
+    }
+
+    private fun downloadAndInstall(url: String) {
+        if (!packageManager.canRequestPackageInstalls()) {
+            Toast.makeText(this, R.string.ui_update_no_install, Toast.LENGTH_LONG).show()
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:$packageName"),
+                ),
+            )
+            return
+        }
+        val request = DownloadManager.Request(Uri.parse(url)).apply {
+            setTitle("Block Blast Solver")
+            setDescription("Скачивание обновления")
+            setMimeType("application/vnd.android.package-archive")
+            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            setDestinationInExternalPublicDir(
+                Environment.DIRECTORY_DOWNLOADS,
+                "blockblast-solver-update.apk",
+            )
+        }
+        val manager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        manager.enqueue(request)
+        Toast.makeText(this, "Загрузка началась — откроется установщик", Toast.LENGTH_LONG).show()
     }
 
     private companion object {

@@ -16,4 +16,11 @@
     <string name="ui_perm_access_ok">Управление: подключено</string>
     <string name="ui_perm_access_no">Управление: НЕ подключено</string>
     <string name="ui_status_waiting">Ожидание кадров…</string>
+    <string name="ui_check_update">Проверить обновления</string>
+    <string name="ui_version_fmt">Версия %1$s (build %2$d)</string>
+    <string name="ui_update_checking">Проверяю обновления…</string>
+    <string name="ui_update_available">Доступна версия %1$s. Открываю загрузку…</string>
+    <string name="ui_update_current">У тебя последняя версия</string>
+    <string name="ui_update_failed">Не удалось проверить: %1$s</string>
+    <string name="ui_update_no_install">Разреши установку приложений из этого источника</string>
 </resources>

@@ -5,13 +5,15 @@ REM
 REM   release-github.bat            build + push a new tagged release with the APK
 REM   release-github.bat build      build only, stage into dist\ (no network)
 REM
-REM Requires: gh CLI, authenticated (gh auth login). The repo is created on first
-REM run if it does not exist yet.
+REM The tag is derived from the APK's own versionCode/versionName (read with aapt2) so
+REM the in-app "check for updates" button compares versions reliably.
+REM Requires the gh CLI, authenticated (gh auth login). Repo is created on first run.
 
 cd /d "%~dp0"
 
 set REPO_NAME=block-blast-auto-solver
 set GH_USER=MikoUIT
+set AAPT=%LOCALAPPDATA%\Android\Sdk\build-tools\36.1.0\aapt2.exe
 
 echo === Сборка APK ===
 call gradlew.bat :app:assembleDebug --console=plain
@@ -26,11 +28,24 @@ if not exist "%APK%" (
     exit /b 1
 )
 
+echo === Чтение версии из APK ===
+set BADGING=%TEMP%\bb-badging.txt
+"%AAPT%" dump badging "%APK%" | findstr /b /c:"package:" > "%BADGING%"
+REM Line shape: package: name='pkg' versionCode='2' versionName='0.2.0' ...
+REM Splitting on the apostrophe gives: 1 "package: name=", 2 pkg, 3 " versionCode=", 4 code, 5 " versionName=", 6 name.
+for /f "tokens=4,6 delims='" %%A in ('type "%BADGING%"') do (
+    set VERSION_CODE=%%A
+    set VERSION_NAME=%%B
+)
+del "%BADGING%" >nul 2>nul
+if "%VERSION_CODE%"=="" (
+    echo Не удалось прочитать versionCode из APK.
+    exit /b 1
+)
+set TAG=v%VERSION_CODE%-%VERSION_NAME%
+echo   версия: %VERSION_NAME% ^(build %VERSION_CODE%^), тег %TAG%
+
 if not exist "dist" mkdir dist
-
-for /f "usebackq delims=" %%I in (`powershell -NoProfile -Command "Get-Date -Format yyyyMMdd-HHmm"`) do set STAMP=%%I
-set TAG=v!STAMP!
-
 copy /y "%APK%" "dist\app-debug.apk" >nul
 
 if /i "%~1"=="build" (
@@ -56,18 +71,17 @@ if errorlevel 1 (
         exit /b 1
     )
 ) else (
-    REM Make sure a remote exists and the latest code is pushed.
     git remote get-url origin >nul 2>nul
     if errorlevel 1 git remote add origin "https://github.com/%GH_USER%/%REPO_NAME%.git"
     git add -A
-    git commit -m "Update %STAMP%" >nul 2>nul
+    git commit -m "Release %VERSION_NAME% (build %VERSION_CODE%)" >nul 2>nul
     git push -u origin HEAD
 )
 
 echo === Публикация релиза %TAG% ===
-gh release create "%TAG%" "dist\app-debug.apk#Block Blast Solver (debug APK)" ^
-    --title "Block Blast Solver %TAG%" ^
-    --notes "Автосборка %STAMP%. Скачай APK ниже и установи на телефон."
+gh release create "%TAG%" "dist\app-debug.apk#Block Blast Solver %VERSION_NAME% (debug APK)" ^
+    --title "Block Blast Solver %VERSION_NAME%" ^
+    --notes "Версия %VERSION_NAME%, build %VERSION_CODE%. Кнопка «Проверить обновления» в приложении обновит автоматически."
 if errorlevel 1 (
     echo Не удалось опубликовать релиз.
     exit /b 1

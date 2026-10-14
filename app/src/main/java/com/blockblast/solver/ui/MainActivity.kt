@@ -16,6 +16,7 @@ import com.blockblast.solver.core.SolverRuntime
 import com.blockblast.solver.databinding.ActivityMainBinding
 import com.blockblast.solver.diag.Diag
 import com.blockblast.solver.diag.ReportSender
+import com.blockblast.solver.diag.SnapshotCollector
 import com.blockblast.solver.overlay.OverlayService
 import com.blockblast.solver.update.UpdateChecker
 import kotlinx.coroutines.CoroutineScope
@@ -47,6 +48,11 @@ class MainActivity : AppCompatActivity(), SolverRuntime.Listener {
         binding.btnToggleCapture.setOnClickListener { toggleCapture() }
         binding.btnCheckUpdate.setOnClickListener { checkForUpdates() }
         binding.btnSendReport.setOnClickListener { sendReport() }
+        binding.btnClearSnapshots.setOnClickListener {
+            SnapshotCollector.clear()
+            updateSnapshotCount()
+            Toast.makeText(this, R.string.ui_report_cleared, Toast.LENGTH_SHORT).show()
+        }
         binding.inputToken.setText(ReportSender.loadToken(this))
         binding.textVersion.text = getString(R.string.ui_version_fmt, currentVersionName(), currentVersionCode())
         binding.modeGroup.setOnCheckedChangeListener { _, checkedId ->
@@ -87,6 +93,12 @@ class MainActivity : AppCompatActivity(), SolverRuntime.Listener {
         if (SolverRuntime.mode == SolverRuntime.Mode.SOLVER) autoPlayer.attach()
         refreshPermissionStatus()
         updateToggleLabel()
+        updateSnapshotCount()
+    }
+
+    private fun updateSnapshotCount() {
+        binding.btnClearSnapshots.text =
+            getString(R.string.ui_report_snapshots_n, SnapshotCollector.count())
     }
 
     override fun onPause() {

@@ -75,6 +75,7 @@ object ReportSender {
         }
         appendLine(DeviceInfo.collect(context))
         appendLine()
+        appendSnapshots()
         appendLine("### Логи")
         appendLine("```")
         val lines = Diag.snapshot()
@@ -84,6 +85,30 @@ object ReportSender {
             lines.forEach { appendLine(it) }
         }
         appendLine("```")
+    }
+
+    /**
+     * Inlines the captured frames as markdown images. GitHub renders `data:` URIs in issue bodies,
+     * so the JPEGs ride along inside the issue with no external hosting or upload step.
+     */
+    private fun StringBuilder.appendSnapshots() {
+        val frames = SnapshotCollector.all()
+        appendLine("### Снимки (${frames.size})")
+        if (frames.isEmpty()) {
+            appendLine("_Снимков нет — жми кнопку 📷 поверх игры перед отправкой._")
+            appendLine()
+            return
+        }
+        for ((index, frame) in frames.withIndex()) {
+            val n = index + 1
+            appendLine("**$n. ${frame.label} — оригинал**")
+            appendLine("![plain$n](data:image/jpeg;base64,${frame.plainJpegBase64})")
+            appendLine()
+            appendLine("**$n. ${frame.label} — с разметкой распознавания**")
+            appendLine("![marked$n](data:image/jpeg;base64,${frame.markedJpegBase64})")
+            appendLine()
+        }
+        appendLine()
     }
 
     private fun postIssue(token: String, title: String, body: String): Result {

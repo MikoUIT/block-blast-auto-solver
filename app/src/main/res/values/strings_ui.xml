@@ -35,4 +35,7 @@
     <string name="ui_update_downloading">Скачиваю обновление…</string>
     <string name="ui_update_download_failed">Не удалось скачать: %1$s</string>
     <string name="ui_update_no_installer">Установщик пакетов не найден на устройстве</string>
+    <string name="ui_report_clear_snapshots">Очистить снимки (0)</string>
+    <string name="ui_report_snapshots_n">Очистить снимки (%1$d)</string>
+    <string name="ui_report_cleared">Снимки очищены</string>
 </resources>

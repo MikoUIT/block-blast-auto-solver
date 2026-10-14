@@ -9,6 +9,8 @@ import android.os.IBinder
 import android.view.Gravity
 import android.view.WindowManager
 import com.blockblast.solver.core.SolverRuntime
+import com.blockblast.solver.diag.Diag
+import com.blockblast.solver.diag.SnapshotCollector
 
 /**
  * Hosts [OverlayView] in a system overlay window that floats above the game.
@@ -26,6 +28,8 @@ class OverlayService : Service(), SolverRuntime.Listener {
     private var windowManager: WindowManager? = null
     private var view: OverlayView? = null
     private var layoutParams: WindowManager.LayoutParams? = null
+    private var cameraButton: SnapshotButtonView? = null
+    private var cameraParams: WindowManager.LayoutParams? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -33,9 +37,11 @@ class OverlayService : Service(), SolverRuntime.Listener {
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         addOverlay()
+        addCameraButton()
         SolverRuntime.addListener(this)
     }
 
+    /** Full-screen, non-touchable layer that draws the debug grid and the move hint. */
     private fun addOverlay() {
         if (view != null) return
         val overlayView = OverlayView(this)
@@ -63,10 +69,55 @@ class OverlayService : Service(), SolverRuntime.Listener {
         layoutParams = params
     }
 
+    /** A separate, touchable window so the camera button can be tapped while the debug layer cannot. */
+    private fun addCameraButton() {
+        if (cameraButton != null) return
+        val button = SnapshotButtonView(this) { captureSnapshot() }
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+        val size = (56 * resources.displayMetrics.density).toInt()
+        val params = WindowManager.LayoutParams(
+            size,
+            size,
+            type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.END
+            x = 24
+            y = 320
+        }
+        windowManager?.addView(button, params)
+        cameraButton = button
+        cameraParams = params
+    }
+
+    private fun captureSnapshot() {
+        val snapshot = SolverRuntime.lastSnapshot
+        if (snapshot == null) {
+            Diag.w(TAG, "camera tapped but no frame yet")
+            return
+        }
+        val count = SnapshotCollector.capture(snapshot)
+        android.widget.Toast.makeText(
+            this,
+            "Снимок $count — ещё или отправляй отчёт",
+            android.widget.Toast.LENGTH_SHORT,
+        ).show()
+    }
+
     private fun removeOverlay() {
         view?.let { windowManager?.removeView(it) }
         view = null
         layoutParams = null
+        cameraButton?.let { windowManager?.removeView(it) }
+        cameraButton = null
+        cameraParams = null
     }
 
     override fun onSnapshot(snapshot: SolverRuntime.Snapshot) {
@@ -97,6 +148,8 @@ class OverlayService : Service(), SolverRuntime.Listener {
 
         fun stopIntent(context: Context): Intent =
             Intent(context, OverlayService::class.java).apply { action = "STOP" }
+
+        private const val TAG = "OverlayService"
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

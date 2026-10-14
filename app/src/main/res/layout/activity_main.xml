@@ -198,6 +198,13 @@
             android:layout_marginTop="8dp"
             android:text="@string/ui_report_send" />
 
+        <Button
+            android:id="@+id/btnClearSnapshots"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/ui_report_clear_snapshots" />
+
         <TextView
             android:id="@+id/textReportStatus"
             android:layout_width="match_parent"

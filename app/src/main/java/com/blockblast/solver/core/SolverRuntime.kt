@@ -31,6 +31,8 @@ object SolverRuntime {
         val detectedPieces: List<PieceRecognizer.RecognizedPiece>,
         val frameId: Long,
         val solveMillis: Long,
+        /** The last processed luminance frame, so a snapshot can be rendered with its overlay. */
+        val gray: com.blockblast.solver.vision.GrayImage?,
     )
 
     data class Suggestion(
@@ -79,6 +81,11 @@ object SolverRuntime {
     /** Total frames handed to us this session; used for the early "frames flow" diagnostics. */
     @Volatile
     private var receivedFrames = 0
+
+    /** Most recent snapshot, so the camera button can capture the current frame on demand. */
+    @Volatile
+    var lastSnapshot: Snapshot? = null
+        private set
 
     fun addListener(l: Listener) {
         if (!listeners.contains(l)) listeners.add(l)
@@ -156,8 +163,10 @@ object SolverRuntime {
             detectedPieces = detected,
             frameId = newFrameId,
             solveMillis = System.currentTimeMillis() - started,
+            gray = gray,
         )
         for (l in listeners) l.onSnapshot(snapshot)
+        lastSnapshot = snapshot
     }
 
     fun onCaptureStopped() {

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Downloaded update APKs are exposed to the system installer via FileProvider. -->
+    <files-path name="updates" path="updates/" />
+    <cache-path name="cache" path="." />
+</paths>

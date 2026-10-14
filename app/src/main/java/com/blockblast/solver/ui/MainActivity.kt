@@ -1,15 +1,13 @@
 package com.blockblast.solver.ui
 
-import android.app.DownloadManager
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.provider.Settings
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import com.blockblast.solver.R
 import com.blockblast.solver.automation.AutoPlayer
 import com.blockblast.solver.automation.TapAccessibilityService
@@ -24,6 +22,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.net.URL
 
 /**
  * The control panel. Starts/stops capture, switches mode, toggles the debug layer and reports
@@ -255,6 +255,14 @@ class MainActivity : AppCompatActivity(), SolverRuntime.Listener {
         }
     }
 
+    /**
+     * Downloads the update APK and hands it to the system installer.
+     *
+     * This deliberately does NOT use DownloadManager: enqueuing only shows a notification, and the
+     * user still has to tap it — on many devices the installer never opens from there. Instead we
+     * fetch the bytes ourselves into private storage, then launch the package installer explicitly
+     * via a FileProvider URI, which is the only reliable way to make the install prompt appear.
+     */
     private fun downloadAndInstall(url: String) {
         if (!packageManager.canRequestPackageInstalls()) {
             Toast.makeText(this, R.string.ui_update_no_install, Toast.LENGTH_LONG).show()
@@ -266,19 +274,67 @@ class MainActivity : AppCompatActivity(), SolverRuntime.Listener {
             )
             return
         }
-        val request = DownloadManager.Request(Uri.parse(url)).apply {
-            setTitle("Block Blast Solver")
-            setDescription("Скачивание обновления")
-            setMimeType("application/vnd.android.package-archive")
-            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            setDestinationInExternalPublicDir(
-                Environment.DIRECTORY_DOWNLOADS,
-                "blockblast-solver-update.apk",
-            )
+        binding.btnCheckUpdate.isEnabled = false
+        binding.textReportStatus.text = getString(R.string.ui_update_downloading)
+
+        CoroutineScope(Dispatchers.IO).launch {
+            val result = runCatching { downloadApk(url) }
+            withContext(Dispatchers.Main) {
+                binding.btnCheckUpdate.isEnabled = true
+                binding.textReportStatus.text = ""
+                result
+                    .onSuccess { file ->
+                        Diag.i(TAG, "update downloaded: ${file.absolutePath} (${file.length()} bytes)")
+                        launchInstaller(file)
+                    }
+                    .onFailure { t ->
+                        Diag.e(TAG, "update download failed", t)
+                        Toast.makeText(
+                            this@MainActivity,
+                            getString(R.string.ui_update_download_failed, t.message ?: "?"),
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+            }
         }
-        val manager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        manager.enqueue(request)
-        Toast.makeText(this, "Загрузка началась — откроется установщик", Toast.LENGTH_LONG).show()
+    }
+
+    /** Streams the APK into files/updates/ and returns the written file. */
+    private fun downloadApk(url: String): File {
+        val dir = File(filesDir, "updates").apply { mkdirs() }
+        val target = File(dir, "blockblast-solver-update.apk")
+        if (target.exists()) target.delete()
+
+        val connection = (URL(url).openConnection() as java.net.HttpURLConnection).apply {
+            connectTimeout = 15000
+            readTimeout = 30000
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", "BlockBlastSolver-Updater")
+        }
+        try {
+            connection.inputStream.use { input ->
+                target.outputStream().use { output -> input.copyTo(output) }
+            }
+        } finally {
+            connection.disconnect()
+        }
+        return target
+    }
+
+    /** Opens the system package installer for a locally downloaded APK. */
+    private fun launchInstaller(file: File) {
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            startActivity(intent)
+        } catch (t: Throwable) {
+            Diag.e(TAG, "no installer handled the APK", t)
+            Toast.makeText(this, R.string.ui_update_no_installer, Toast.LENGTH_LONG).show()
+        }
     }
 
     private companion object {

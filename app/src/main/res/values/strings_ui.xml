@@ -32,4 +32,7 @@
     <string name="ui_report_sent">Отчёт отправлен: %1$s</string>
     <string name="ui_report_failed">Не отправлено: %1$s</string>
     <string name="ui_report_token_saved">Токен сохранён на этом телефоне</string>
+    <string name="ui_update_downloading">Скачиваю обновление…</string>
+    <string name="ui_update_download_failed">Не удалось скачать: %1$s</string>
+    <string name="ui_update_no_installer">Установщик пакетов не найден на устройстве</string>
 </resources>

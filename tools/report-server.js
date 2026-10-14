@@ -59,10 +59,13 @@ function writeReport(body) {
     body.deviceInfo || '(нет)',
     '',
     `## Снимки (${(body.snapshots || []).length})`,
-    (body.snapshots || []).map((s, i) =>
-      `### ${i + 1}. ${s.label}\n\n**оригинал**\n\n![plain${i}](./snapshots/${i + 1}-plain.jpg)\n\n` +
-      `**с разметкой**\n\n![marked${i}](./snapshots/${i + 1}-marked.jpg)\n`
-    ).join('\n'),
+    (body.snapshots || []).map((s, i) => {
+      const views = s.views || [];
+      const imgs = views.map((v) =>
+        `**${v.name}**\n\n![${v.name}${i}](./snapshots/${i + 1}-${v.name}.jpg)\n`
+      ).join('\n');
+      return `### ${i + 1}. ${s.label}\n\n${imgs}`;
+    }).join('\n'),
     '',
     '## Логи',
     '```',
@@ -79,17 +82,16 @@ function writeReport(body) {
     'utf8',
   );
 
-  // Snapshots as real JPEGs.
+  // Snapshots as real JPEGs — one file per view, named after the view (colour, grey, binary, ...).
   const snaps = body.snapshots || [];
   if (snaps.length) {
     const snapDir = path.join(folder, 'snapshots');
     fs.mkdirSync(snapDir, { recursive: true });
     snaps.forEach((s, i) => {
-      if (s.plainJpeg) {
-        fs.writeFileSync(path.join(snapDir, `${i + 1}-plain.jpg`), Buffer.from(s.plainJpeg, 'base64'));
-      }
-      if (s.markedJpeg) {
-        fs.writeFileSync(path.join(snapDir, `${i + 1}-marked.jpg`), Buffer.from(s.markedJpeg, 'base64'));
+      for (const v of s.views || []) {
+        if (!v.jpeg) continue;
+        const safe = String(v.name || 'view').replace(/[^a-z0-9_-]/gi, '_');
+        fs.writeFileSync(path.join(snapDir, `${i + 1}-${safe}.jpg`), Buffer.from(v.jpeg, 'base64'));
       }
     });
   }

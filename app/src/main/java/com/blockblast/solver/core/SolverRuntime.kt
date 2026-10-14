@@ -7,6 +7,7 @@ import com.blockblast.solver.model.Piece
 import com.blockblast.solver.model.Placement
 import com.blockblast.solver.vision.BoardRecognizer
 import com.blockblast.solver.vision.FrameConverter
+import com.blockblast.solver.vision.GrayImage
 import com.blockblast.solver.vision.GridDetector
 import com.blockblast.solver.vision.PieceRecognizer
 import java.util.concurrent.atomic.AtomicBoolean
@@ -32,7 +33,16 @@ object SolverRuntime {
         val frameId: Long,
         val solveMillis: Long,
         /** The last processed luminance frame, so a snapshot can be rendered with its overlay. */
-        val gray: com.blockblast.solver.vision.GrayImage?,
+        val gray: GrayImage?,
+        /** The original colour frame (ARGB ints), so a snapshot can show the untouched source. */
+        val colorArgb: IntArray? = null,
+        /** The fill/empty margin actually used by the recogniser for this frame. */
+        val fillThreshold: Double = 0.0,
+        /** The board background luminance the recogniser estimated. */
+        val backgroundLuma: Double = 0.0,
+        /** Pixel size of one board cell, used to reconstruct the binarisation geometry. */
+        val cellWidth: Double = 0.0,
+        val cellHeight: Double = 0.0,
     )
 
     data class Suggestion(
@@ -120,7 +130,9 @@ object SolverRuntime {
         lastFrameTime = now
 
         val started = System.currentTimeMillis()
-        val gray = FrameConverter.toGray(image)
+        // Keep the colour frame only for the report path; the solver works on luminance.
+        val colorArgb = FrameConverter.toArgb(image)
+        val gray = GrayImage.fromArgb(colorArgb, width, height)
         val grid = gridDetector.detect(gray) ?: cachedGeometry
         if (grid == null) {
             Diag.w(TAG, "board not found in frame")
@@ -164,6 +176,11 @@ object SolverRuntime {
             frameId = newFrameId,
             solveMillis = System.currentTimeMillis() - started,
             gray = gray,
+            colorArgb = colorArgb,
+            fillThreshold = recognized.threshold,
+            backgroundLuma = recognized.background,
+            cellWidth = grid.cellWidth,
+            cellHeight = grid.cellHeight,
         )
         for (l in listeners) l.onSnapshot(snapshot)
         lastSnapshot = snapshot

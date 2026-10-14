@@ -77,11 +77,17 @@ object LocalServerSender {
 
         val frames = JSONArray()
         for (frame in SnapshotCollector.all()) {
+            val views = JSONArray()
+            for (view in frame.views) {
+                views.put(JSONObject().apply {
+                    put("name", view.name)
+                    put("jpeg", view.jpegBase64)
+                })
+            }
             frames.put(
                 JSONObject().apply {
                     put("label", frame.label)
-                    put("plainJpeg", frame.plainJpegBase64)
-                    put("markedJpeg", frame.markedJpegBase64)
+                    put("views", views)
                 },
             )
         }

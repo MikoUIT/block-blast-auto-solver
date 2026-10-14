@@ -122,14 +122,14 @@ object ReportSender {
             appendLine()
             for ((index, frame) in frames.withIndex()) {
                 val n = index + 1
-                val plainUrl = uploadImage(token, "$stamp-$n-plain", frame.plainJpegBase64)
-                val markedUrl = uploadImage(token, "$stamp-$n-marked", frame.markedJpegBase64)
-                appendLine("**$n. ${frame.label} — оригинал**")
-                appendLine(if (plainUrl != null) "![plain$n]($plainUrl)" else "_не загрузилось_")
+                appendLine("**Снимок $n — ${frame.label}**")
                 appendLine()
-                appendLine("**$n. ${frame.label} — с разметкой распознавания**")
-                appendLine(if (markedUrl != null) "![marked$n]($markedUrl)" else "_не загрузилось_")
-                appendLine()
+                for (view in frame.views) {
+                    val url = uploadImage(token, "$stamp-$n-${view.name}", view.jpegBase64)
+                    appendLine("_${view.name}_")
+                    appendLine(if (url != null) "![${view.name} $n]($url)" else "_не загрузилось_")
+                    appendLine()
+                }
             }
         }
     }

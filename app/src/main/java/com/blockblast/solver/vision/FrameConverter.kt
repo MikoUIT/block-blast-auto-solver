@@ -37,4 +37,34 @@ object FrameConverter {
         }
         return GrayImage(width, height, out)
     }
+
+    /**
+     * Reads the frame as packed ARGB ints, preserving colour. Used only for bug reports — the solver
+     * itself works on luminance — so this deliberately does the simple thing and is off the hot path.
+     */
+    fun toArgb(image: Image): IntArray {
+        val plane = image.planes[0]
+        val buffer = plane.buffer
+        buffer.rewind()
+        val rowStride = plane.rowStride
+        val pixelStride = plane.pixelStride
+        val width = image.width
+        val height = image.height
+
+        val out = IntArray(width * height)
+        val rowBytes = ByteArray(rowStride)
+        for (y in 0 until height) {
+            buffer.get(rowBytes, 0, minOf(rowStride, buffer.remaining()))
+            val rowBase = y * width
+            for (x in 0 until width) {
+                val idx = x * pixelStride
+                if (idx + 3 >= rowBytes.size) break
+                val r = rowBytes[idx].toInt() and 0xFF
+                val g = rowBytes[idx + 1].toInt() and 0xFF
+                val b = rowBytes[idx + 2].toInt() and 0xFF
+                out[rowBase + x] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+            }
+        }
+        return out
+    }
 }

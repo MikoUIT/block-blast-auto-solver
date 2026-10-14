@@ -19,10 +19,10 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
 import android.util.DisplayMetrics
-import android.util.Log
 import android.view.WindowManager
 import com.blockblast.solver.R
 import com.blockblast.solver.core.SolverRuntime
+import com.blockblast.solver.diag.Diag
 
 /**
  * Owns the single `MediaProjection` capture session.
@@ -81,7 +81,7 @@ class ScreenCaptureService : Service() {
             intent.getParcelableExtra(EXTRA_RESULT_DATA)
         }
         if (data == null) {
-            Log.e(TAG, "no consent data in start intent")
+            Diag.e(TAG, "no consent data in start intent")
             stopSelf()
             return
         }
@@ -91,12 +91,12 @@ class ScreenCaptureService : Service() {
         val media = try {
             manager.getMediaProjection(resultCode, data)
         } catch (t: Throwable) {
-            Log.e(TAG, "getMediaProjection failed", t)
+            Diag.e(TAG, "getMediaProjection failed", t)
             stopSelf()
             return
         }
         if (media == null) {
-            Log.e(TAG, "getMediaProjection returned null")
+            Diag.e(TAG, "getMediaProjection returned null")
             stopSelf()
             return
         }
@@ -105,9 +105,9 @@ class ScreenCaptureService : Service() {
         try {
             startCapture(media)
             running = true
-            Log.i(TAG, "capture started")
+            Diag.i(TAG, "capture started")
         } catch (t: Throwable) {
-            Log.e(TAG, "startCapture failed", t)
+            Diag.e(TAG, "startCapture failed", t)
             stopSelf()
         }
     }

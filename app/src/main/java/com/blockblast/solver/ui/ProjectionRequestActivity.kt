@@ -6,12 +6,12 @@ import android.graphics.Color
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import com.blockblast.solver.capture.ScreenCaptureService
+import com.blockblast.solver.diag.Diag
 
 /**
  * Asks the system for screen-capture consent and hands the token to [ScreenCaptureService].
@@ -50,7 +50,7 @@ class ProjectionRequestActivity : Activity() {
             addView(label)
         }
         setContentView(root)
-        Log.i(TAG, "created")
+        Diag.i(TAG, "created")
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -66,17 +66,17 @@ class ProjectionRequestActivity : Activity() {
     private fun launchConsent() {
         val manager = getSystemService(MediaProjectionManager::class.java)
         if (manager == null) {
-            Log.e(TAG, "MediaProjectionManager unavailable")
+            Diag.e(TAG, "MediaProjectionManager unavailable")
             Toast.makeText(this, "MediaProjection недоступен на этом устройстве", Toast.LENGTH_LONG).show()
             finish()
             return
         }
         val intent = manager.createScreenCaptureIntent()
-        Log.i(TAG, "launching consent dialog")
+        Diag.i(TAG, "launching consent dialog")
         try {
             startActivityForResult(intent, requestCode)
         } catch (t: Throwable) {
-            Log.e(TAG, "createScreenCaptureIntent failed", t)
+            Diag.e(TAG, "createScreenCaptureIntent failed", t)
             Toast.makeText(this, "Не удалось вызвать диалог захвата", Toast.LENGTH_LONG).show()
             finish()
         }
@@ -85,7 +85,7 @@ class ProjectionRequestActivity : Activity() {
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        Log.i(TAG, "consent result: requestCode=$requestCode resultCode=$resultCode data=${data != null} handled=$handled")
+        Diag.i(TAG, "consent result: requestCode=$requestCode resultCode=$resultCode data=${data != null} handled=$handled")
         if (handled) return
         handled = true
         if (requestCode != this.requestCode) {
@@ -100,13 +100,13 @@ class ProjectionRequestActivity : Activity() {
                 } else {
                     startService(intent)
                 }
-                Log.i(TAG, "capture service start requested")
+                Diag.i(TAG, "capture service start requested")
             } catch (t: Throwable) {
-                Log.e(TAG, "failed to start capture service", t)
+                Diag.e(TAG, "failed to start capture service", t)
                 Toast.makeText(this, "Не удалось запустить сервис захвата", Toast.LENGTH_LONG).show()
             }
         } else {
-            Log.w(TAG, "consent denied or empty (resultCode=$resultCode)")
+            Diag.w(TAG, "consent denied or empty (resultCode=$resultCode)")
             Toast.makeText(this, "Захват экрана отклонён", Toast.LENGTH_SHORT).show()
         }
         finish()

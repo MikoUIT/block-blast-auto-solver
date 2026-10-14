@@ -8,7 +8,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
-import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.blockblast.solver.R
@@ -17,6 +16,8 @@ import com.blockblast.solver.automation.TapAccessibilityService
 import com.blockblast.solver.capture.ScreenCaptureService
 import com.blockblast.solver.core.SolverRuntime
 import com.blockblast.solver.databinding.ActivityMainBinding
+import com.blockblast.solver.diag.Diag
+import com.blockblast.solver.diag.ReportSender
 import com.blockblast.solver.overlay.OverlayService
 import com.blockblast.solver.update.UpdateChecker
 import kotlinx.coroutines.CoroutineScope
@@ -45,6 +46,8 @@ class MainActivity : AppCompatActivity(), SolverRuntime.Listener {
         binding.btnAccessibility.setOnClickListener { openAccessibilitySettings() }
         binding.btnToggleCapture.setOnClickListener { toggleCapture() }
         binding.btnCheckUpdate.setOnClickListener { checkForUpdates() }
+        binding.btnSendReport.setOnClickListener { sendReport() }
+        binding.inputToken.setText(ReportSender.loadToken(this))
         binding.textVersion.text = getString(R.string.ui_version_fmt, currentVersionName(), currentVersionCode())
         binding.modeGroup.setOnCheckedChangeListener { _, checkedId ->
             SolverRuntime.mode = if (checkedId == binding.modeSolver.id) {
@@ -96,7 +99,7 @@ class MainActivity : AppCompatActivity(), SolverRuntime.Listener {
         if (SolverRuntime.isRunning()) {
             stopCapture()
         } else {
-            Log.i(TAG, "requesting projection consent")
+            Diag.i(TAG, "requesting projection consent")
             startActivity(Intent(this, ProjectionRequestActivity::class.java))
             // Bring the overlay up alongside capture so the debug layer is visible immediately.
             if (Settings.canDrawOverlays(this)) {
@@ -214,6 +217,39 @@ class MainActivity : AppCompatActivity(), SolverRuntime.Listener {
                             getString(R.string.ui_update_failed, result.message),
                             Toast.LENGTH_LONG,
                         ).show()
+                }
+            }
+        }
+    }
+
+    /**
+     * Saves whatever token the user typed, then files a report as a GitHub issue on a background
+     * thread. The token stays in private preferences and is never written to the APK or git.
+     */
+    private fun sendReport() {
+        val token = binding.inputToken.text?.toString()?.trim().orEmpty()
+        if (token.isBlank()) {
+            Toast.makeText(this, R.string.ui_report_no_token, Toast.LENGTH_LONG).show()
+            return
+        }
+        ReportSender.saveToken(this, token)
+        val note = binding.inputReportNote.text?.toString().orEmpty()
+
+        binding.btnSendReport.isEnabled = false
+        binding.textReportStatus.text = getString(R.string.ui_report_sending)
+        Diag.i(TAG, "sending report, note=${note.take(60)}")
+
+        CoroutineScope(Dispatchers.IO).launch {
+            val result = ReportSender.send(this@MainActivity, note)
+            withContext(Dispatchers.Main) {
+                binding.btnSendReport.isEnabled = true
+                binding.textReportStatus.text = when (result) {
+                    is ReportSender.Result.Sent ->
+                        getString(R.string.ui_report_sent, result.issueUrl)
+                    is ReportSender.Result.Failed ->
+                        getString(R.string.ui_report_failed, result.message)
+                    ReportSender.Result.NoToken ->
+                        getString(R.string.ui_report_no_token)
                 }
             }
         }

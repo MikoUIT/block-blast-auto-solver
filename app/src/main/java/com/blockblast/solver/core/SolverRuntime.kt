@@ -1,6 +1,7 @@
 package com.blockblast.solver.core
 
 import android.media.Image
+import com.blockblast.solver.diag.Diag
 import com.blockblast.solver.model.Board
 import com.blockblast.solver.model.Piece
 import com.blockblast.solver.model.Placement
@@ -105,6 +106,7 @@ object SolverRuntime {
         val gray = FrameConverter.toGray(image)
         val grid = gridDetector.detect(gray) ?: cachedGeometry
         if (grid == null) {
+            Diag.w(TAG, "board not found in frame")
             for (l in listeners) l.onCaptureError("Поле не найдено")
             return
         }
@@ -119,6 +121,20 @@ object SolverRuntime {
             engine.suggest(recognized.board, pieces)
         } else null
 
+        val newFrameId = ++frameId
+        // Log a compact summary every ~30 frames so the report shows real recognition state
+        // without drowning in 30-fps noise.
+        if (newFrameId % 30 == 1L) {
+            Diag.i(
+                TAG,
+                "frame=$newFrameId grid=${grid.left},${grid.top},${grid.width}x${grid.height} " +
+                    "filled=${recognized.board.filledCount()} pieces=${pieces.size}" +
+                    "(matched=${detected.count { it.matched }}) " +
+                    "suggest=${suggestion?.let { "clears=${it.linesCleared} score=${"%.0f".format(it.projectedScore)}" } ?: "none"} " +
+                    "ms=${System.currentTimeMillis() - started}",
+            )
+        }
+
         val snapshot = Snapshot(
             board = recognized.board,
             recognizedPieces = pieces,
@@ -128,7 +144,7 @@ object SolverRuntime {
                 Suggestion(it.placement, it.linesCleared, it.projectedScore, it.rationale)
             },
             detectedPieces = detected,
-            frameId = ++frameId,
+            frameId = newFrameId,
             solveMillis = System.currentTimeMillis() - started,
         )
         for (l in listeners) l.onSnapshot(snapshot)
@@ -144,4 +160,6 @@ object SolverRuntime {
     fun onMovePerformed() {
         lastFrameTime = 0L
     }
+
+    private const val TAG = "SolverRuntime"
 }

@@ -15,6 +15,7 @@ import com.blockblast.solver.capture.ScreenCaptureService
 import com.blockblast.solver.core.SolverRuntime
 import com.blockblast.solver.databinding.ActivityMainBinding
 import com.blockblast.solver.diag.Diag
+import com.blockblast.solver.diag.LocalServerSender
 import com.blockblast.solver.diag.ReportSender
 import com.blockblast.solver.diag.SnapshotCollector
 import com.blockblast.solver.overlay.OverlayService
@@ -235,22 +236,44 @@ class MainActivity : AppCompatActivity(), SolverRuntime.Listener {
     }
 
     /**
-     * Saves whatever token the user typed, then files a report as a GitHub issue on a background
-     * thread. The token stays in private preferences and is never written to the APK or git.
+     * Sends the report to the local desktop receiver — the primary path, no token required. Only if
+     * the PC is unreachable does it fall back to filing a GitHub issue (which needs a token).
      */
     private fun sendReport() {
-        val token = binding.inputToken.text?.toString()?.trim().orEmpty()
-        if (token.isBlank()) {
-            Toast.makeText(this, R.string.ui_report_no_token, Toast.LENGTH_LONG).show()
-            return
-        }
-        ReportSender.saveToken(this, token)
         val note = binding.inputReportNote.text?.toString().orEmpty()
 
         binding.btnSendReport.isEnabled = false
         binding.textReportStatus.text = getString(R.string.ui_report_sending)
         Diag.i(TAG, "sending report, note=${note.take(60)}")
 
+        CoroutineScope(Dispatchers.IO).launch {
+            val local = LocalServerSender.send(this@MainActivity, note)
+            withContext(Dispatchers.Main) {
+                when (local) {
+                    is LocalServerSender.Result.Sent -> {
+                        binding.btnSendReport.isEnabled = true
+                        binding.textReportStatus.text =
+                            getString(R.string.ui_report_sent_local, local.folder)
+                    }
+                    is LocalServerSender.Result.Failed -> {
+                        // PC unreachable — try GitHub if a token is present.
+                        val token = binding.inputToken.text?.toString()?.trim().orEmpty()
+                        if (token.isBlank()) {
+                            binding.btnSendReport.isEnabled = true
+                            binding.textReportStatus.text =
+                                getString(R.string.ui_report_local_failed_no_token, local.message)
+                        } else {
+                            sendViaGithub(note, token)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun sendViaGithub(note: String, token: String) {
+        ReportSender.saveToken(this, token)
+        binding.textReportStatus.text = getString(R.string.ui_report_sending_github)
         CoroutineScope(Dispatchers.IO).launch {
             val result = ReportSender.send(this@MainActivity, note)
             withContext(Dispatchers.Main) {

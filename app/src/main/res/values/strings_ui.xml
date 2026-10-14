@@ -24,7 +24,7 @@
     <string name="ui_update_failed">Не удалось проверить: %1$s</string>
     <string name="ui_update_no_install">Разреши установку приложений из этого источника</string>
     <string name="ui_report_title">Отчёт об ошибке</string>
-    <string name="ui_report_token_hint">GitHub-токен (Issues + Contents: write) — хранится только на телефоне</string>
+    <string name="ui_report_token_hint">GitHub-токен (необязательно, только если ПК недоступен)</string>
     <string name="ui_report_note_hint">Что случилось? Опиши своими словами</string>
     <string name="ui_report_send">Отправить отчёт</string>
     <string name="ui_report_no_token">Сначала вставь GitHub-токен</string>
@@ -38,4 +38,7 @@
     <string name="ui_report_clear_snapshots">Очистить снимки (0)</string>
     <string name="ui_report_snapshots_n">Очистить снимки (%1$d)</string>
     <string name="ui_report_cleared">Снимки очищены</string>
+    <string name="ui_report_sent_local">Отчёт сохранён на ПК: %1$s</string>
+    <string name="ui_report_local_failed_no_token">ПК недоступен (%1$s). Вставь GitHub-токен для резервной отправки.</string>
+    <string name="ui_report_sending_github">ПК недоступен — отправляю на GitHub…</string>
 </resources>

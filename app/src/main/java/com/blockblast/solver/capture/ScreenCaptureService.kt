@@ -139,7 +139,6 @@ class ScreenCaptureService : Service() {
                 return@setOnImageAvailableListener
             }
             try {
-                Diag.d(TAG, "frame ${image.width}x${image.height} fmt=${image.format}")
                 SolverRuntime.onFrame(image, width, height)
             } catch (t: Throwable) {
                 // Never let a bad frame kill the capture thread — but record why it was bad.

@@ -16,9 +16,21 @@ import java.util.concurrent.ConcurrentLinkedDeque
  */
 object Diag {
 
-    private const val MAX_LINES = 1500
+    private const val MAX_LINES = 1200
+
+    /**
+     * Hard cap on the total characters kept in the ring. GitHub rejects issue bodies over 65536
+     * characters, so the log alone must never fill that budget — reports also carry device info and
+     * image links. Lines are dropped from the oldest end until the total fits.
+     */
+    private const val MAX_CHARS = 40000
+
     private val ring = ConcurrentLinkedDeque<String>()
     private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
+
+    /** Running character count of [ring], so trimming stays O(1) per append. */
+    @Volatile
+    private var ringChars = 0
 
     @Volatile
     private var crashHandler: Thread.UncaughtExceptionHandler? = null
@@ -61,13 +73,23 @@ object Diag {
     }
 
     private fun append(level: String, tag: String, message: String) {
-        val line = "${timeFormat.format(Date())} $level/$tag: $message"
-        ring.addLast(line)
-        while (ring.size > MAX_LINES) ring.pollFirst()
+        // Cap a single line too: a stack trace can be thousands of characters on its own.
+        val line = "${timeFormat.format(Date())} $level/$tag: ${message.take(2000)}"
+        synchronized(this) {
+            ring.addLast(line)
+            ringChars += line.length + 1
+            while (ring.size > MAX_LINES || (ringChars > MAX_CHARS && ring.size > 1)) {
+                val removed = ring.pollFirst() ?: break
+                ringChars -= removed.length + 1
+            }
+        }
     }
 
     /** Snapshot of the buffered log lines, oldest first. */
     fun snapshot(): List<String> = ring.toList()
 
-    fun clear() = ring.clear()
+    fun clear() = synchronized(this) {
+        ring.clear()
+        ringChars = 0
+    }
 }

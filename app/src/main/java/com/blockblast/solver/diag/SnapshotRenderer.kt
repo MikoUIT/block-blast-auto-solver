@@ -32,7 +32,7 @@ object SnapshotRenderer {
     private const val JPEG_QUALITY = 78
     private const val FIXED_THRESHOLD = 128
 
-    data class View(val name: String, val jpegBase64: String)
+    data class View(val name: String, val jpegBase64: String, val ext: String = "jpg")
 
     /** All rendered views for one frame. */
     data class Frame(
@@ -56,17 +56,20 @@ object SnapshotRenderer {
             views.add(View("colour", encode(argbToBitmap(argb, gray.width, gray.height, outW, outH))))
         }
 
-        // 2. Grey luminance.
-        views.add(View("grey", encode(grayToBitmap(gray, outW, outH))))
+        // 2. Grey luminance. Encoded as lossless PNG: for tuning the detector I need the exact
+        //    pixels, and JPEG smoothing measurably shifts the autocorrelation pitch.
+        views.add(View("grey", encodePng(grayToBitmap(gray, outW, outH)), ext = "png"))
 
         // 3. Adaptive binary: a pixel is "filled" when it differs from the board background by more
         //    than the margin the recogniser used. This is the exact decision the cells go through.
+        //    PNG, because JPEG would blur the hard black/white edges that matter here.
         views.add(
             View(
                 "binary",
-                encode(binaryBitmap(gray, outW, outH) { luma ->
+                encodePng(binaryBitmap(gray, outW, outH) { luma ->
                     abs(luma - snapshot.backgroundLuma) > snapshot.fillThreshold
                 }),
+                ext = "png",
             ),
         )
 
@@ -74,7 +77,8 @@ object SnapshotRenderer {
         views.add(
             View(
                 "binaryFixed",
-                encode(binaryBitmap(gray, outW, outH) { luma -> luma >= FIXED_THRESHOLD }),
+                encodePng(binaryBitmap(gray, outW, outH) { luma -> luma >= FIXED_THRESHOLD }),
+                ext = "png",
             ),
         )
 
@@ -185,6 +189,13 @@ object SnapshotRenderer {
     private fun encode(bitmap: Bitmap): String {
         val stream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, stream)
+        bitmap.recycle()
+        return Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
+    }
+
+    private fun encodePng(bitmap: Bitmap): String {
+        val stream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
         bitmap.recycle()
         return Base64.encodeToString(stream.toByteArray(), Base64.NO_WRAP)
     }

@@ -12,7 +12,8 @@ import java.util.concurrent.CopyOnWriteArrayList
  */
 object SnapshotCollector {
 
-    private const val MAX_FRAMES = 8
+    /** Upper bound so a runaway session cannot exhaust memory; high enough not to get in the way. */
+    private const val MAX_FRAMES = 60
     private val frames = CopyOnWriteArrayList<SnapshotRenderer.Frame>()
 
     /** Captures the given snapshot; returns the new buffer size. */

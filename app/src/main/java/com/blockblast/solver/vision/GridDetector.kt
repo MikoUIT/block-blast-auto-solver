@@ -69,6 +69,10 @@ class GridDetector(
         val geometry: GridGeometry,
         val cellPitch: Double,
         val confidence: Double,
+        /** Pitch candidates considered, as "pitch:strength" pairs — surfaced in the log. */
+        val candidates: List<String> = emptyList(),
+        /** Quality score of the winning candidate. */
+        val quality: Double = 0.0,
     )
 
     fun detect(image: GrayImage): GridGeometry? = detectDetailed(image)?.geometry
@@ -77,48 +81,78 @@ class GridDetector(
         val colEnergy = projectionX(image)
         val rowEnergy = projectionY(image)
 
-        // The X axis carries the vertical grid lines, which are long and unbroken, so its pitch is
-        // the reliable one. (Measured on real frames: pitchX is a rock-steady 79 px across frames,
-        // while the Y projection is weaker and its autocorrelation picks false periods like 31 or
-        // 159 — i.e. pitch/2.5 and pitch×2.) So: find the pitch on X, then confirm it on Y *within a
-        // narrow window around it* instead of searching the whole range.
-        val pitchX = findPitch(colEnergy) ?: return null
-        val pitchY = findPitchNear(rowEnergy, pitchX.pitch) ?: return null
+        // Autocorrelation rarely yields exactly one clean peak: harmonics (pitch, 2·pitch …) and
+        // near-multiples all score highly, and on raw (uncompressed) frames noise adds spurious
+        // periods. So we evaluate the top few candidates and let a *board-quality* score decide,
+        // rather than trusting a single peak. That score rewards a large square whose outer border
+        // lines are strong and whose interior has the eight evenly spaced divisions of a grid.
+        val candidates = findPitchCandidates(colEnergy, config.maxPitchCandidates)
+        if (candidates.isEmpty()) return null
 
-        // Cells are square, so the two pitches must match. When they do (within a small tolerance)
-        // we average for sub-pixel accuracy; when Y disagrees we trust X, whose long vertical grid
-        // lines make it the more stable signal across frames.
-        val agree = abs(pitchX.pitch - pitchY.pitch) <= pitchX.pitch * config.pitchAgreement
-        val pitch = if (agree) (pitchX.pitch + pitchY.pitch) / 2.0 else pitchX.pitch
-        if (pitch < config.minCellPixels) return null
+        var best: Detection? = null
+        var bestScore = 0.0
+        val trace = ArrayList<String>()
+        for (cx in candidates) {
+            val ref = cx.pitch
+            val cy = findPitchNear(rowEnergy, ref) ?: continue
+            val agree = abs(ref - cy.pitch) <= ref * config.pitchAgreement
+            val pitch = if (agree) (ref + cy.pitch) / 2.0 else ref
+            if (pitch < config.minCellPixels) continue
 
-        val span = pitch * 8
-        if (span > min(image.width, image.height)) return null
+            val span = pitch * 8
+            if (span > min(image.width, image.height)) continue
 
-        // When the axes disagree, don't trust the noisy Y phase — re-derive the top edge purely from
-        // the row projection using the X pitch.
-        val topPhase = if (agree) pitchY.phase else bestPhaseIndex(rowEnergy, pitch)
-        val left = bestPhase(colEnergy, pitch, pitchX.phase, image.width, span) ?: return null
-        val top = bestPhase(rowEnergy, pitch, topPhase, image.height, span) ?: return null
+            val topPhase = if (agree) cy.phase else bestPhaseIndex(rowEnergy, pitch)
+            val left = bestPhase(colEnergy, pitch, cx.phase, image.width, span) ?: continue
+            val top = bestPhase(rowEnergy, pitch, topPhase, image.height, span) ?: continue
 
-        val geom = GridGeometry(
-            left = left,
-            top = top,
-            right = (left + span).toInt(),
-            bottom = (top + span).toInt(),
-        ).let {
-            GridGeometry(
-                it.left.coerceIn(0, image.width),
-                it.top.coerceIn(0, image.height),
-                it.right.coerceIn(0, image.width),
-                it.bottom.coerceIn(0, image.height),
-            )
+            val geom = GridGeometry(left, top, (left + span).toInt(), (top + span).toInt())
+            if (geom.width < config.minBoardPixels || geom.height < config.minBoardPixels) continue
+            if (!insideFrame(geom, image)) continue
+
+            val score = boardQuality(geom, colEnergy, rowEnergy, cx.strength)
+            trace.add("${pitch.toInt()}q${"%.2f".format(score)}@${left},${top}")
+            if (score > bestScore) {
+                bestScore = score
+                best = Detection(geom, pitch, cx.strength, trace.toList(), score)
+            }
         }
-        if (geom.width < config.minBoardPixels || geom.height < config.minBoardPixels) return null
+        if (best == null || bestScore < config.minBoardQuality) return null
+        return best
+    }
 
-        val confidence = pitchX.strength
-        if (confidence < config.minConfidence) return null
-        return Detection(geom, pitch, confidence)
+    private fun insideFrame(g: GridGeometry, image: GrayImage): Boolean =
+        g.left >= -2 && g.top >= -2 && g.right <= image.width + 2 && g.bottom <= image.height + 2
+
+    /**
+     * Scores a candidate board: a large square with strong border lines and strong evenly-spaced
+     * interior divisions wins. Size matters because the real board is the biggest grid on screen —
+     * a small sub-square of it would otherwise score just as well on structure alone.
+     */
+    private fun boardQuality(
+        geom: GridGeometry,
+        colEnergy: IntArray,
+        rowEnergy: IntArray,
+        pitchStrength: Double,
+    ): Double {
+        val colMax = (colEnergy.maxOrNull() ?: 0).coerceAtLeast(1)
+        val rowMax = (rowEnergy.maxOrNull() ?: 0).coerceAtLeast(1)
+        val pitch = geom.width / 8.0
+        val tolX = (pitch * 0.15).toInt().coerceAtLeast(2)
+        val tolY = tolX
+
+        var vertical = 0.0
+        var horizontal = 0.0
+        for (i in 0..8) {
+            val x = (geom.left + i * pitch).toInt()
+            val y = (geom.top + i * pitch).toInt()
+            vertical += maxWindow(colEnergy, x - tolX, x + tolX) / colMax.toDouble()
+            horizontal += maxWindow(rowEnergy, y - tolY, y + tolY) / rowMax.toDouble()
+        }
+        val structure = (vertical + horizontal) / 18.0
+        // Normalised size in [0,1] against the smaller screen dimension.
+        val sizeNorm = pitch * 8.0 / 1080.0
+        return structure * 0.7 + sizeNorm.coerceIn(0.0, 1.0) * 0.3 + pitchStrength * 0.1
     }
 
     /**
@@ -176,6 +210,58 @@ class GridDetector(
         val strength = if (norm <= 0.0) 0.0 else bestScore / norm
         val phase = bestPhaseIndex(energy, bestP.toDouble())
         return Pitch(bestP.toDouble(), phase, strength.coerceIn(0.0, 1.0))
+    }
+
+    /**
+     * Returns the strongest, well-separated autocorrelation peaks as pitch candidates.
+     *
+     * Peaks within [config.pitchSeparation] of each other are merged (keeping the stronger), so a
+     * harmonic and its fundamental don't both appear if they are genuinely the same period, while
+     * a true half/double pair (which are far apart) is kept for [detectDetailed] to judge.
+     */
+    private fun findPitchCandidates(energy: IntArray, limit: Int): List<Pitch> {
+        val mean = energy.average()
+        val centred = DoubleArray(energy.size) { energy[it] - mean }
+        val norm = autocorrelationNorm(centred)
+        if (norm <= 0.0) return emptyList()
+
+        val minP = config.minCellPixels
+        val maxP = min(energy.size / 8, config.maxCellPixels)
+        if (minP > maxP) return emptyList()
+
+        // Full autocorrelation curve.
+        val curve = DoubleArray(maxP + 2)
+        for (p in minP..maxP) {
+            var sum = 0.0
+            var count = 0
+            var i = 0
+            while (i + p < energy.size) {
+                sum += centred[i] * centred[i + p]
+                count++
+                i++
+            }
+            curve[p] = if (count == 0) 0.0 else sum / count
+        }
+
+        // Local maxima only.
+        val peaks = ArrayList<Pair<Int, Double>>()
+        for (p in minP..maxP) {
+            val v = curve[p]
+            val left = if (p - 1 >= minP) curve[p - 1] else Double.NEGATIVE_INFINITY
+            val right = if (p + 1 <= maxP) curve[p + 1] else Double.NEGATIVE_INFINITY
+            if (v >= left && v >= right && v > 0) peaks.add(p to v)
+        }
+        peaks.sortByDescending { it.second }
+
+        val chosen = ArrayList<Pitch>()
+        val minSep = config.pitchSeparation * minP
+        for ((p, v) in peaks) {
+            if (chosen.any { abs(it.pitch - p) < minSep }) continue
+            val strength = (v / norm).coerceIn(0.0, 1.0)
+            chosen.add(Pitch(p.toDouble(), bestPhaseIndex(energy, p.toDouble()), strength))
+            if (chosen.size >= limit) break
+        }
+        return chosen
     }
 
     private fun autocorrelationNorm(centred: DoubleArray): Double {
@@ -319,8 +405,14 @@ data class DetectorConfig(
     val maxCellPixels: Int = 200,
     /** The two axes must agree on the cell pitch within this fraction. */
     val pitchAgreement: Double = 0.12,
-    /** Minimum normalised autocorrelation to trust the pitch. */
-    val minConfidence: Double = 0.05,
+    /** Minimum normalised autocorrelation to trust a pitch candidate. */
+    val minConfidence: Double = 0.03,
+    /** How many autocorrelation peaks to evaluate as board candidates. */
+    val maxPitchCandidates: Int = 6,
+    /** Peaks closer than this fraction of the min pitch are treated as the same candidate. */
+    val pitchSeparation: Double = 0.5,
+    /** Minimum board-quality score (see [boardQuality]) to accept a detection. */
+    val minBoardQuality: Double = 0.25,
 ) {
     companion object {
         val DEFAULT = DetectorConfig()

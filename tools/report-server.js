@@ -62,7 +62,7 @@ function writeReport(body) {
     (body.snapshots || []).map((s, i) => {
       const views = s.views || [];
       const imgs = views.map((v) =>
-        `**${v.name}**\n\n![${v.name}${i}](./snapshots/${i + 1}-${v.name}.jpg)\n`
+        `**${v.name}**\n\n![${v.name}${i}](./snapshots/${i + 1}-${v.name}.${v.ext || 'jpg'})\n`
       ).join('\n');
       return `### ${i + 1}. ${s.label}\n\n${imgs}`;
     }).join('\n'),
@@ -93,7 +93,8 @@ function writeReport(body) {
       for (const v of s.views || []) {
         if (!v.jpeg) continue;
         const safe = String(v.name || 'view').replace(/[^a-z0-9_-]/gi, '_');
-        fs.writeFileSync(path.join(snapDir, `${i + 1}-${safe}.jpg`), Buffer.from(v.jpeg, 'base64'));
+        const ext = String(v.ext || 'jpg').replace(/[^a-z0-9]/gi, '');
+        fs.writeFileSync(path.join(snapDir, `${i + 1}-${safe}.${ext}`), Buffer.from(v.jpeg, 'base64'));
       }
     });
   }

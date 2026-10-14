@@ -81,6 +81,7 @@ object LocalServerSender {
             for (view in frame.views) {
                 views.put(JSONObject().apply {
                     put("name", view.name)
+                    put("ext", view.ext)
                     put("jpeg", view.jpegBase64)
                 })
             }

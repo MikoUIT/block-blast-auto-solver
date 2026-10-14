@@ -133,7 +133,8 @@ object SolverRuntime {
         // Keep the colour frame only for the report path; the solver works on luminance.
         val colorArgb = FrameConverter.toArgb(image)
         val gray = GrayImage.fromArgb(colorArgb, width, height)
-        val grid = gridDetector.detect(gray) ?: cachedGeometry
+        val detection = gridDetector.detectDetailed(gray)
+        val grid = detection?.geometry ?: cachedGeometry
         if (grid == null) {
             Diag.w(TAG, "board not found in frame")
             for (l in listeners) l.onCaptureError("Поле не найдено")
@@ -157,6 +158,8 @@ object SolverRuntime {
             Diag.i(
                 TAG,
                 "frame=$newFrameId grid=${grid.left},${grid.top},${grid.width}x${grid.height} " +
+                    "pitch=${detection?.cellPitch?.toInt()} q=${"%.2f".format(detection?.quality ?: 0.0)} " +
+                    "cands=[${detection?.candidates?.joinToString(",") ?: "-"}] " +
                     "filled=${recognized.board.filledCount()} pieces=${pieces.size}" +
                     "(matched=${detected.count { it.matched }}) " +
                     "suggest=${suggestion?.let { "clears=${it.linesCleared} score=${"%.0f".format(it.projectedScore)}" } ?: "none"} " +

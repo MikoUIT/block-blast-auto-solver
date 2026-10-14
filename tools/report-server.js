@@ -75,12 +75,14 @@ function writeReport(body) {
   ].join('\n');
   fs.writeFileSync(path.join(folder, 'report.md'), md, 'utf8');
 
-  // Also dump the raw JSON so nothing is lost in the markdown rendering.
+  // Also dump the raw JSON (without the log) plus the log as its own .log file, so the log stays
+  // readable line-by-line instead of being one escaped "\n" string inside JSON.
   fs.writeFileSync(
     path.join(folder, 'report.json'),
-    JSON.stringify({ note: body.note, deviceInfo: body.deviceInfo, log: body.log }, null, 2),
+    JSON.stringify({ note: body.note, deviceInfo: body.deviceInfo }, null, 2),
     'utf8',
   );
+  fs.writeFileSync(path.join(folder, 'log.txt'), body.log || '(пусто)', 'utf8');
 
   // Snapshots as real JPEGs — one file per view, named after the view (colour, grey, binary, ...).
   const snaps = body.snapshots || [];
